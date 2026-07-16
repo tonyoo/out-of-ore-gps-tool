@@ -14,6 +14,7 @@ import math
 import sys
 import traceback
 import logging
+import copy
 from datetime import datetime
 
 LOG_FILE = "crash.log"
@@ -70,6 +71,44 @@ def get_version():
 
 __version__ = get_version()
 SETTINGS_FILE = get_settings_path()
+
+
+def get_default_settings():
+    """Factory defaults — matches the calibrated project settings.json."""
+    return {
+        "sets": [
+            {"label": "Blade up", "x": 2003, "y": 201, "threshold": 200, "hotkey": "="},
+            {"label": "Blade down", "x": 2004, "y": 213, "threshold": 200, "hotkey": "-"},
+            {"label": "Blade left", "x": 2421, "y": 214, "threshold": 200, "hotkey": "["},
+            {"label": "Blade right", "x": 2406, "y": 217, "threshold": 200, "hotkey": "]"},
+            {
+                "label": "Line Angle",
+                "x": 1889,
+                "y": 366,
+                "threshold": 200,
+                "x2": 2009,
+                "y2": 244,
+                "target_angle": 14.0,
+                "hotkey_greater": "=",
+                "hotkey_less": "-",
+                "line_delay": 10,
+                "line_hold": 50,
+            },
+        ],
+        "global_hotkey": "f9",
+        "preset_hotkeys": {
+            "hotkey_1": "f6",
+            "hotkey_2": "f7",
+            "hotkey_3": "f8",
+        },
+        "press_delay": 100,
+        "hold_mode": False,
+        "window_width": 506,
+        "window_height": 590,
+        "start_includes": [True, True, True, True, True],
+        "target_window": "Out Of Ore",
+    }
+
 
 class PixelMonitorGUI:
     def __init__(self, root):
@@ -145,7 +184,7 @@ class PixelMonitorGUI:
 
         controls_row1 = tk.Frame(controls_frame)
         controls_row1.pack(fill=tk.X, pady=1)
-        tk.Label(controls_row1, text="Stop All:", width=10, anchor="w").pack(side=tk.LEFT)
+        tk.Label(controls_row1, text="Toggle All:", width=10, anchor="w").pack(side=tk.LEFT)
         self.global_hotkey_entry = tk.Entry(controls_row1, width=8)
         self.global_hotkey_entry.insert(0, self.settings.get('global_hotkey', 'f9'))
         self.global_hotkey_entry.pack(side=tk.LEFT, padx=(0, 10))
@@ -214,6 +253,11 @@ class PixelMonitorGUI:
         self.refresh_runtime_settings()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.start_preview()
+        # Register F6/F7/F8/F9 (etc.) immediately — previously only after Start All
+        try:
+            self.setup_global_hotkey()
+        except Exception as e:
+            log_error(e, "startup hotkey setup")
 
     def open_debug_log(self):
         if os.path.exists(LOG_FILE):
@@ -229,65 +273,47 @@ class PixelMonitorGUI:
         self.main_canvas.bind("<Enter>", lambda e: self.main_canvas.bind_all("<MouseWheel>", _on_mousewheel))
         self.main_canvas.bind("<Leave>", lambda e: self.main_canvas.unbind_all("<MouseWheel>"))
 
+    def write_settings_file(self, settings, path=None):
+        """Write settings dict to disk (default: SETTINGS_FILE)."""
+        target = path or SETTINGS_FILE
+        try:
+            with open(target, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=4)
+            return True
+        except Exception as e:
+            log_error(e, f"write settings file ({target})")
+            return False
+
     def load_settings(self):
-        default_settings = {
-            "sets": [
-                {"label": "Set 1", "x": 100, "y": 100, "threshold": 200, "hotkey": "a"},
-                {"label": "Set 2", "x": 200, "y": 200, "threshold": 200, "hotkey": "b"},
-                {"label": "Set 3", "x": 300, "y": 300, "threshold": 200, "hotkey": "c"},
-                {"label": "Set 4", "x": 400, "y": 400, "threshold": 200, "hotkey": "d"},
-                {"label": "Line Angle", "x": 100, "y": 100, "threshold": 200, "x2": 200, "y2": 200, "target_angle": 0, "hotkey_greater": "d", "hotkey_less": "a", "line_delay": 100, "line_hold": 50}
-            ],
-            "global_hotkey": "f9",
-            "preset_hotkeys": {
-                "hotkey_1": "f6",
-                "hotkey_2": "f7",
-                "hotkey_3": "f8"
-            },
-            "press_delay": 50,
-            "hold_mode": False,
-            "window_width": 750,
-            "window_height": 700,
-            "start_includes": [True, True, True, True, True],
-            "target_window": "OutOfOre"
-        }
+        default_settings = get_default_settings()
+        created_or_reset = False
 
         if os.path.exists(SETTINGS_FILE):
             try:
-                with open(SETTINGS_FILE, 'r') as f:
+                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
                     loaded_settings = json.load(f)
                 self.settings = self.normalize_settings(loaded_settings, default_settings)
             except Exception as e:
                 log_error(e, "load settings")
                 self.settings = default_settings
+                created_or_reset = True
         else:
             self.settings = default_settings
+            created_or_reset = True
+
+        if created_or_reset:
+            self.write_settings_file(self.settings)
 
     def normalize_settings(self, settings, default_settings=None):
         if default_settings is None:
-            default_settings = {
-                "sets": [
-                    {"label": "Set 1", "x": 100, "y": 100, "threshold": 200, "hotkey": "a"},
-                    {"label": "Set 2", "x": 200, "y": 200, "threshold": 200, "hotkey": "b"},
-                    {"label": "Set 3", "x": 300, "y": 300, "threshold": 200, "hotkey": "c"},
-                    {"label": "Set 4", "x": 400, "y": 400, "threshold": 200, "hotkey": "d"},
-                    {"label": "Line Angle", "x": 100, "y": 100, "threshold": 200, "x2": 200, "y2": 200, "target_angle": 0, "hotkey_greater": "d", "hotkey_less": "a", "line_delay": 100, "line_hold": 50}
-                ],
-                "global_hotkey": "f9",
-                "preset_hotkeys": {
-                    "hotkey_1": "f6",
-                    "hotkey_2": "f7",
-                    "hotkey_3": "f8"
-                },
-                "press_delay": 50,
-                "hold_mode": False,
-                "window_width": 750,
-                "window_height": 700,
-                "start_includes": [True, True, True, True, True],
-                "target_window": "OutOfOre"
-            }
+            default_settings = get_default_settings()
+        else:
+            default_settings = copy.deepcopy(default_settings)
 
-        normalized = dict(default_settings)
+        normalized = copy.deepcopy(default_settings)
+        if not isinstance(settings, dict):
+            settings = {}
+
         normalized.update({k: v for k, v in settings.items() if k != 'sets'})
 
         sets = settings.get('sets', [])
@@ -354,6 +380,12 @@ class PixelMonitorGUI:
             with open(SETTINGS_FILE, 'w') as f:
                 json.dump(self.settings, f, indent=4)
 
+            # Re-bind global/preset hotkeys if the user edited them
+            try:
+                self.setup_global_hotkey()
+            except Exception as e:
+                log_error(e, "save settings hotkey setup")
+
             messagebox.showinfo("Saved", "Settings saved to settings.json")
         except Exception as e:
             log_error(e, "save settings")
@@ -372,6 +404,11 @@ class PixelMonitorGUI:
 
                 with open(file_path, 'w') as f:
                     json.dump(self.settings, f, indent=4)
+
+                try:
+                    self.setup_global_hotkey()
+                except Exception as e:
+                    log_error(e, "save as hotkey setup")
 
                 messagebox.showinfo("Saved", f"Settings saved to {file_path}")
             except Exception as e:
@@ -435,6 +472,11 @@ class PixelMonitorGUI:
                 start_includes = self.settings.get('start_includes', [True]*5)
                 for i in range(min(len(start_includes), len(self.set_vars))):
                     self.set_vars[i].set(start_includes[i])
+
+                try:
+                    self.setup_global_hotkey()
+                except Exception as e:
+                    log_error(e, "load settings hotkey setup")
 
                 messagebox.showinfo("Loaded", f"Settings loaded from {file_path}")
             except Exception as e:
@@ -933,9 +975,10 @@ class PixelMonitorGUI:
         ]
         self.hotkey_bindings = []
 
-        stop_binding = self.build_hotkey_binding(hotkey_str, self.stop_all)
-        if stop_binding:
-            self.hotkey_bindings.append(stop_binding)
+        # Global hotkey toggles start/stop (README: F9 toggles all sets)
+        toggle_binding = self.build_hotkey_binding(hotkey_str, self.toggle_all)
+        if toggle_binding:
+            self.hotkey_bindings.append(toggle_binding)
 
         preset_hotkeys = self.settings.get('preset_hotkeys', {})
         for index, (setting_key, set_numbers, status_text) in enumerate(preset_actions):
