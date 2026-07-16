@@ -1,0 +1,63 @@
+{
+    "sets": [
+        {
+            "label": "Blade up",
+            "x": 2003,
+            "y": 201,
+            "threshold": 200,
+            "hotkey": "="
+        },
+        {
+            "label": "Blade down",
+            "x": 2004,
+            "y": 213,
+            "threshold": 200,
+            "hotkey": "-"
+        },
+        {
+            "label": "Blade left",
+            "x": 2421,
+            "y": 214,
+            "threshold": 200,
+            "hotkey": "["
+        },
+        {
+            "label": "Blade right",
+            "x": 2406,
+            "y": 217,
+            "threshold": 200,
+            "hotkey": "]"
+        },
+        {
+            "label": "Line Angle",
+            "x": 1889,
+            "y": 366,
+            "threshold": 200,
+            "x2": 2009,
+            "y2": 244,
+            "target_angle": 14.0,
+            "hotkey_greater": "=",
+            "hotkey_less": "-",
+            "line_delay": 10,
+            "line_hold": 50
+        }
+    ],
+    "global_hotkey": "f9",
+    "preset_hotkeys": {
+        "hotkey_1": "f6",
+        "hotkey_2": "f7",
+        "hotkey_3": "f8"
+    },
+    "press_delay": 100,
+    "hold_mode": false,
+    "window_width": 506,
+    "window_height": 590,
+    "start_includes": [
+        true,
+        true,
+        true,
+        true,
+        true
+    ],
+    "target_window": "Out Of Ore"
+}

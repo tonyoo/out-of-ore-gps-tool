@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Local / runtime
+crash.log
+*.log
+
+# Older snapshot (not part of mainline)
+var1/
+
+# PyInstaller outputs
+Buildit/build/
+Buildit/dist/
+*.exe
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
