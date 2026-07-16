@@ -43,12 +43,38 @@ def get_settings_path():
         return os.path.join(os.path.dirname(sys.executable), "settings.json")
     return "settings.json"
 
+
+def get_version():
+    """Read version from VERSION file (dev tree or bundled with the exe)."""
+    candidates = []
+    if getattr(sys, 'frozen', False):
+        # PyInstaller one-file extracts datas into _MEIPASS
+        meipass = getattr(sys, '_MEIPASS', None)
+        if meipass:
+            candidates.append(os.path.join(meipass, 'VERSION'))
+        candidates.append(os.path.join(os.path.dirname(sys.executable), 'VERSION'))
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(here, 'VERSION'))
+    candidates.append(os.path.join(os.getcwd(), 'VERSION'))
+    for path in candidates:
+        try:
+            if os.path.isfile(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    ver = f.read().strip()
+                if ver:
+                    return ver
+        except OSError:
+            continue
+    return '0.0.0'
+
+
+__version__ = get_version()
 SETTINGS_FILE = get_settings_path()
 
 class PixelMonitorGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Out Of Ore GPS Tool")
+        self.root.title(f"Out Of Ore GPS Tool v{__version__}")
         self.preview_thread = None
         self.preview_running = False
         self.active_set = 0

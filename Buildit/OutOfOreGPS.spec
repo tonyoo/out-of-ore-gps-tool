@@ -19,6 +19,7 @@ for modname in ('pynput', 'mss'):
 datas += [
     (os.path.join(SPEC_DIR, 'README.txt'), '.'),
     (os.path.join(SOURCE_DIR, 'settings.json'), '.'),
+    (os.path.join(SOURCE_DIR, 'VERSION'), '.'),
 ]
 
 a = Analysis(

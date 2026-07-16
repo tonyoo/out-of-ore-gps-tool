@@ -5,6 +5,8 @@ set SCRIPT_DIR=%~dp0
 set DIST_DIR=%SCRIPT_DIR%dist
 set BUILD_DIR=%SCRIPT_DIR%build
 set SPEC_FILE=%SCRIPT_DIR%OutOfOreGPS.spec
+set DO_PAUSE=1
+if /i "%~1"=="nopause" set DO_PAUSE=0
 
 echo ============================================
 echo  Building OutOfOre GPS Tool .exe
@@ -13,7 +15,7 @@ echo.
 
 if not exist "%SPEC_FILE%" (
     echo ERROR: Spec file not found at %SPEC_FILE%
-    pause
+    if %DO_PAUSE%==1 pause
     exit /b 1
 )
 
@@ -26,7 +28,7 @@ pyinstaller OutOfOreGPS.spec --distpath "%DIST_DIR%" --workpath "%BUILD_DIR%" --
 if %ERRORLEVEL% neq 0 (
     echo.
     echo ERROR: Build failed with error code %ERRORLEVEL%
-    pause
+    if %DO_PAUSE%==1 pause
     exit /b 1
 )
 
@@ -41,4 +43,5 @@ echo NOTE: The .exe will create settings.json in the same
 echo directory it is launched from.
 echo.
 
-pause
+if %DO_PAUSE%==1 pause
+exit /b 0

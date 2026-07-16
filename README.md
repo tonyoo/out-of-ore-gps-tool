@@ -69,6 +69,39 @@ Full example:
 }
 ```
 
+## Releases (build + upload)
+
+One-click release from the project root (requires `git`, `gh`, and `pyinstaller` on PATH):
+
+```
+update.bat
+```
+
+What it does:
+
+1. Bumps the version in `VERSION` (default: **patch** `1.0.0` → `1.0.1`)
+2. Builds `Buildit\dist\OutOfOreGPS.exe`
+3. Commits, tags (`vX.Y.Z`), and pushes to GitHub
+4. Creates a **GitHub Release** and attaches the `.exe`
+
+Options:
+
+```
+update.bat              rem patch bump (default)
+update.bat minor        rem 1.0.0 -> 1.1.0
+update.bat major        rem 1.0.0 -> 2.0.0
+update.bat 1.2.3        rem set exact version
+update.bat --no-bump    rem release current VERSION as-is
+```
+
+First release example: `update.bat 1.0.0`
+
+Local exe-only build (no GitHub upload):
+
+```
+Buildit\build_exe.bat
+```
+
 ## Troubleshooting
 
 - **Keys not pressing** — make sure the target window is focused and visible
