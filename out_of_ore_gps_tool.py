@@ -187,7 +187,10 @@ class PixelMonitorGUI:
         tk.Label(controls_row1, text="Toggle All:", width=10, anchor="w").pack(side=tk.LEFT)
         self.global_hotkey_entry = tk.Entry(controls_row1, width=8)
         self.global_hotkey_entry.insert(0, self.settings.get('global_hotkey', 'f9'))
-        self.global_hotkey_entry.pack(side=tk.LEFT, padx=(0, 10))
+        self.global_hotkey_entry.pack(side=tk.LEFT, padx=(0, 2))
+        global_rec_btn = tk.Button(controls_row1, text="Rec", width=3)
+        global_rec_btn.pack(side=tk.LEFT, padx=(0, 10))
+        global_rec_btn.config(command=lambda e=self.global_hotkey_entry, b=global_rec_btn: self.record_next_hotkey(e, b))
         tk.Label(controls_row1, text="Target:", width=8, anchor="w").pack(side=tk.LEFT)
         self.target_window_entry = tk.Entry(controls_row1, width=18)
         self.target_window_entry.insert(0, self.settings.get('target_window', 'Out Of Ore'))
@@ -213,7 +216,10 @@ class PixelMonitorGUI:
             tk.Label(controls_row2, text=f"{label}:").pack(side=tk.LEFT)
             entry = tk.Entry(controls_row2, width=6)
             entry.insert(0, preset_hotkeys.get(f"hotkey_{index}", default_value))
-            entry.pack(side=tk.LEFT, padx=(2, 4))
+            entry.pack(side=tk.LEFT, padx=(2, 2))
+            rec_btn = tk.Button(controls_row2, text="Rec", width=3)
+            rec_btn.pack(side=tk.LEFT, padx=(0, 2))
+            rec_btn.config(command=lambda e=entry, b=rec_btn: self.record_next_hotkey(e, b))
             tk.Label(controls_row2, text=description).pack(side=tk.LEFT, padx=(0, 10))
             self.preset_hotkey_entries.append(entry)
 
@@ -505,7 +511,10 @@ class PixelMonitorGUI:
         tk.Label(config_row, text="Key:").grid(row=0, column=0)
         hotkey_entry = tk.Entry(config_row, width=5)
         hotkey_entry.insert(0, self.settings['sets'][set_num].get('hotkey', chr(97 + set_num)))
-        hotkey_entry.grid(row=0, column=1, padx=(2, 0))
+        hotkey_entry.grid(row=0, column=1, padx=(2, 2))
+        rec_btn = tk.Button(config_row, text="Rec", width=3, command=None)
+        rec_btn.grid(row=0, column=2, padx=(0, 0))
+        rec_btn.config(command=lambda e=hotkey_entry, b=rec_btn: self.record_next_hotkey(e, b))
 
         status_row = tk.Frame(frame)
         status_row.pack(fill=tk.X, pady=1)
@@ -575,11 +584,17 @@ class PixelMonitorGUI:
         tk.Label(row2, text=">:").grid(row=0, column=2)
         hotkey_greater_entry = tk.Entry(row2, width=4)
         hotkey_greater_entry.insert(0, self.settings['sets'][set_num].get('hotkey_greater', 'd'))
-        hotkey_greater_entry.grid(row=0, column=3, padx=(2, 4))
-        tk.Label(row2, text="<:").grid(row=0, column=4)
+        hotkey_greater_entry.grid(row=0, column=3, padx=(2, 2))
+        rec_greater_btn = tk.Button(row2, text="Rec", width=3)
+        rec_greater_btn.grid(row=0, column=4, padx=(0, 4))
+        rec_greater_btn.config(command=lambda e=hotkey_greater_entry, b=rec_greater_btn: self.record_next_hotkey(e, b))
+        tk.Label(row2, text="<:").grid(row=0, column=5)
         hotkey_less_entry = tk.Entry(row2, width=4)
         hotkey_less_entry.insert(0, self.settings['sets'][set_num].get('hotkey_less', 'a'))
-        hotkey_less_entry.grid(row=0, column=5, padx=(2, 0))
+        hotkey_less_entry.grid(row=0, column=6, padx=(2, 2))
+        rec_less_btn = tk.Button(row2, text="Rec", width=3)
+        rec_less_btn.grid(row=0, column=7, padx=(0, 0))
+        rec_less_btn.config(command=lambda e=hotkey_less_entry, b=rec_less_btn: self.record_next_hotkey(e, b))
 
         row3 = tk.Frame(frame)
         row3.pack(fill=tk.X, pady=1)
@@ -751,6 +766,58 @@ class PixelMonitorGUI:
             "special": key_map.get(hotkey_text),
             "callback": callback,
         }
+
+    def _build_reverse_key_map(self):
+        from pynput.keyboard import Key
+        return {
+            Key.f1: "f1", Key.f2: "f2", Key.f3: "f3", Key.f4: "f4",
+            Key.f5: "f5", Key.f6: "f6", Key.f7: "f7", Key.f8: "f8",
+            Key.f9: "f9", Key.f10: "f10", Key.f11: "f11", Key.f12: "f12",
+            Key.page_up: "pageup", Key.page_down: "pagedown",
+            Key.home: "home", Key.end: "end", Key.insert: "insert",
+            Key.delete: "delete", Key.space: "space", Key.tab: "tab",
+            Key.enter: "enter", Key.esc: "escape",
+            Key.up: "up", Key.down: "down", Key.left: "left", Key.right: "right",
+        }
+
+    def record_next_hotkey(self, entry_widget, rec_button):
+        original_text = rec_button.cget("text")
+        original_state = rec_button.cget("state")
+        rec_button.config(text="Listening...", state=tk.DISABLED, fg="red")
+
+        reverse_map = self._build_reverse_key_map()
+
+        def on_press(key):
+            try:
+                result = None
+                if hasattr(key, 'char') and key.char:
+                    result = key.char
+                elif hasattr(key, 'name'):
+                    name_lower = key.name.lower()
+                    for spec_key, name_str in reverse_map.items():
+                        if hasattr(key, 'value') and hasattr(spec_key, 'value') and key.value == spec_key.value:
+                            result = name_str
+                            break
+                    if result is None:
+                        result = name_lower
+                if result is None:
+                    return
+
+                def apply_result():
+                    entry_widget.delete(0, tk.END)
+                    entry_widget.insert(0, result)
+                    rec_button.config(text=original_text, state=original_state, fg="black")
+                self.root.after(0, apply_result)
+            except Exception as e:
+                log_error(e, "record_next_hotkey")
+                def restore():
+                    rec_button.config(text=original_text, state=original_state, fg="black")
+                self.root.after(0, restore)
+
+            return False  # stop listener after one key
+
+        listener = keyboard.Listener(on_press=on_press, suppress=False)
+        listener.start()
 
     def hotkey_matches(self, key, binding):
         if not binding:
