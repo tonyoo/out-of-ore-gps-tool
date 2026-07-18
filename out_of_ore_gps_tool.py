@@ -134,6 +134,7 @@ class PixelMonitorGUI:
         }
         self.running = [False]*5
         self.monitor_threads = [None]*5
+        self.stop_events = [threading.Event() for _ in range(5)]
 
         self.load_settings()
         self.setup_gui()
@@ -1115,20 +1116,23 @@ class PixelMonitorGUI:
             return
 
         self.running[set_num] = True
+        self.stop_events[set_num] = threading.Event()
+        stop_event = self.stop_events[set_num]
         self.entries['start_btn'][set_num].config(state=tk.DISABLED)
         self.entries['stop_btn'][set_num].config(state=tk.NORMAL)
         self.update_status_buttons()
 
         if self.entries['is_line_finder'][set_num]:
             self.monitor_threads[set_num] = threading.Thread(target=self.monitor_loop_line,
-                args=(set_num, x, y, x2, y2, threshold, target_angle, hotkey_greater, hotkey_less, line_delay, line_hold), daemon=True)
+                args=(set_num, x, y, x2, y2, threshold, target_angle, hotkey_greater, hotkey_less, line_delay, line_hold, stop_event), daemon=True)
         else:
             self.monitor_threads[set_num] = threading.Thread(target=self.monitor_loop,
-                args=(set_num, x, y, threshold, hotkey), daemon=True)
+                args=(set_num, x, y, threshold, hotkey, stop_event), daemon=True)
         self.monitor_threads[set_num].start()
 
     def stop_monitor(self, set_num):
         self.running[set_num] = False
+        self.stop_events[set_num].set()
         self.entries['start_btn'][set_num].config(state=tk.NORMAL)
         self.entries['stop_btn'][set_num].config(state=tk.DISABLED)
         self.set_indicator_off(set_num)
@@ -1265,10 +1269,10 @@ class PixelMonitorGUI:
         except Exception as e:
             log_error(e, "press_key")
 
-    def monitor_loop(self, set_num, x, y, threshold, hotkey):
+    def monitor_loop(self, set_num, x, y, threshold, hotkey, stop_event):
         interval = 0.05
         set_label = f"Set {set_num+1}"
-        while self.running[set_num]:
+        while not stop_event.is_set():
             try:
                 color = self.get_pixel_color(x, y)
                 condition_met = color and all(c >= threshold for c in color[:3])
@@ -1281,14 +1285,14 @@ class PixelMonitorGUI:
                     self.root.after(0, lambda sn=set_num: self.set_indicator_off(sn))
             except Exception as e:
                 log_error(e, f"monitor_loop set {set_num}")
-            time.sleep(interval)
+            stop_event.wait(interval)
 
-    def monitor_loop_line(self, set_num, x1, y1, x2, y2, threshold, target_angle, hotkey_greater, hotkey_less, line_delay, line_hold):
+    def monitor_loop_line(self, set_num, x1, y1, x2, y2, threshold, target_angle, hotkey_greater, hotkey_less, line_delay, line_hold, stop_event):
         interval = line_delay / 1000.0
         hold_time = line_hold / 1000.0
         last_direction = None
 
-        while self.running[set_num]:
+        while not stop_event.is_set():
             try:
                 result = self.find_line_angle(set_num, x1, y1, x2, y2, threshold)
                 if result:
@@ -1322,7 +1326,7 @@ class PixelMonitorGUI:
                     self.root.after(0, lambda: self.status_label.config(text="Status: No line found", fg="gray"))
             except Exception as e:
                 log_error(e, f"monitor_loop_line set {set_num}")
-            time.sleep(interval)
+            stop_event.wait(interval)
 
     def hold_key(self, key):
         try:
