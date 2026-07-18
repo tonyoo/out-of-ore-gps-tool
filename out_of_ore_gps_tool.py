@@ -137,6 +137,7 @@ class PixelMonitorGUI:
 
         self.load_settings()
         self.setup_gui()
+        self.settings_snapshot = copy.deepcopy(self.settings)
 
     def setup_gui(self):
         w = self.settings.get('window_width', 750)
@@ -392,6 +393,7 @@ class PixelMonitorGUI:
             except Exception as e:
                 log_error(e, "save settings hotkey setup")
 
+            self.settings_snapshot = copy.deepcopy(self.settings)
             messagebox.showinfo("Saved", "Settings saved to settings.json")
         except Exception as e:
             log_error(e, "save settings")
@@ -416,6 +418,7 @@ class PixelMonitorGUI:
                 except Exception as e:
                     log_error(e, "save as hotkey setup")
 
+                self.settings_snapshot = copy.deepcopy(self.settings)
                 messagebox.showinfo("Saved", f"Settings saved to {file_path}")
             except Exception as e:
                 log_error(e, "save as settings")
@@ -484,6 +487,7 @@ class PixelMonitorGUI:
                 except Exception as e:
                     log_error(e, "load settings hotkey setup")
 
+                self.settings_snapshot = copy.deepcopy(self.settings)
                 messagebox.showinfo("Loaded", f"Settings loaded from {file_path}")
             except Exception as e:
                 log_error(e, "load settings file")
@@ -1225,17 +1229,37 @@ class PixelMonitorGUI:
         except Exception as e:
             log_error(e, f"set_indicator_off set {set_num}")
 
+    def resolve_key(self, key_str):
+        from pynput.keyboard import Key
+        key_map = {
+            'f1': Key.f1, 'f2': Key.f2, 'f3': Key.f3, 'f4': Key.f4,
+            'f5': Key.f5, 'f6': Key.f6, 'f7': Key.f7, 'f8': Key.f8,
+            'f9': Key.f9, 'f10': Key.f10, 'f11': Key.f11, 'f12': Key.f12,
+            'pageup': Key.page_up, 'pagedown': Key.page_down,
+            'home': Key.home, 'end': Key.end, 'insert': Key.insert,
+            'delete': Key.delete, 'space': Key.space, 'tab': Key.tab,
+            'enter': Key.enter, 'escape': Key.esc, 'esc': Key.esc,
+            'up': Key.up, 'down': Key.down, 'left': Key.left, 'right': Key.right,
+        }
+        text = (key_str or "").lower().strip()
+        if text in key_map:
+            return key_map[text]
+        if len(text) == 1:
+            return text
+        return text
+
     def press_key(self, key):
         try:
             if not self.is_window_focused():
                 return
             delay = self.cached_press_delay / 1000.0
             hold = self.cached_hold_mode
+            resolved = self.resolve_key(key)
             with self.key_lock:
-                self.keyboard_controller.press(key)
+                self.keyboard_controller.press(resolved)
                 if not hold:
                     time.sleep(delay)
-                    self.keyboard_controller.release(key)
+                    self.keyboard_controller.release(resolved)
                 else:
                     time.sleep(delay)
         except Exception as e:
@@ -1277,10 +1301,11 @@ class PixelMonitorGUI:
                         key = hotkey_less
                         direction = "less"
 
+                    resolved = self.resolve_key(key)
                     with self.key_lock:
-                        self.keyboard_controller.press(key)
+                        self.keyboard_controller.press(resolved)
                         time.sleep(hold_time)
-                        self.keyboard_controller.release(key)
+                        self.keyboard_controller.release(resolved)
 
                     if direction != last_direction:
                         if last_direction:
@@ -1303,19 +1328,58 @@ class PixelMonitorGUI:
         try:
             if not self.is_window_focused():
                 return
+            resolved = self.resolve_key(key)
             with self.key_lock:
-                self.keyboard_controller.press(key)
+                self.keyboard_controller.press(resolved)
         except Exception as e:
             log_error(e, "hold_key")
 
     def release_key(self, key):
         try:
+            resolved = self.resolve_key(key)
             with self.key_lock:
-                self.keyboard_controller.release(key)
+                self.keyboard_controller.release(resolved)
         except Exception as e:
             log_error(e, "release_key")
 
+    def has_unsaved_changes(self):
+        try:
+            current = self.collect_current_settings()
+        except Exception:
+            return False
+        ignore_keys = {"window_width", "window_height"}
+        for key in set(list(current.keys()) + list(self.settings_snapshot.keys())):
+            if key in ignore_keys:
+                continue
+            if key == "sets":
+                for i, (cur_set, snap_set) in enumerate(zip(current["sets"], self.settings_snapshot["sets"])):
+                    for k in set(list(cur_set.keys()) + list(snap_set.keys())):
+                        if cur_set.get(k) != snap_set.get(k):
+                            return True
+            elif key == "preset_hotkeys":
+                if current.get(key) != self.settings_snapshot.get(key):
+                    return True
+            elif current.get(key) != self.settings_snapshot.get(key):
+                return True
+        return False
+
     def on_close(self):
+        if self.has_unsaved_changes():
+            answer = messagebox.askyesnocancel("Unsaved Changes", "You have unsaved settings changes.\nWould you like to save before closing?")
+            if answer is None:  # Cancel
+                return
+            if answer:  # Yes
+                try:
+                    self.settings = self.collect_current_settings()
+                    self.refresh_runtime_settings()
+                    with open(SETTINGS_FILE, 'w') as f:
+                        json.dump(self.settings, f, indent=4)
+                    self.settings_snapshot = copy.deepcopy(self.settings)
+                except Exception as e:
+                    log_error(e, "on_close save")
+                    messagebox.showerror("Error", f"Failed to save: {e}")
+                    return
+
         self.preview_running = False
         self.running = [False]*5
         self.hotkey_active = False
@@ -1327,6 +1391,12 @@ class PixelMonitorGUI:
         self.root.destroy()
 
 if __name__ == "__main__":
+    import ctypes
+    if not ctypes.windll.shell32.IsUserAnAdmin():
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("Admin Required", "This tool must be run as administrator.\nRight-click and select 'Run as administrator'.")
+        sys.exit(0)
     root = tk.Tk()
     app = PixelMonitorGUI(root)
     root.mainloop()
